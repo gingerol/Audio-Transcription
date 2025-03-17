@@ -1,0 +1,17 @@
+# Node modules
+node_modules/
+
+# Build files
+dist/
+
+# Environment variables
+.env
+
+# Uploaded files
+uploads/*.m4a
+uploads/*.mp3
+uploads/*.wav
+uploads/*.ogg
+
+# Logs
+*.log
