@@ -37,8 +37,33 @@ const upload = multer({
 // Store ongoing transcriptions
 const transcriptions = new Map();
 
+// Queue for processing files sequentially
+const transcriptionQueue = [];
+let isProcessing = false;
 
-
+async function processQueue() {
+    if (isProcessing || transcriptionQueue.length === 0) {
+        return;
+    }
+    
+    isProcessing = true;
+    const { filePath, jobId } = transcriptionQueue.shift();
+    
+    try {
+        await transcribeAudio(filePath, jobId);
+    } catch (error) {
+        console.error(`[${Date.now()}] Error processing file in queue:`, error);
+        transcriptions.set(jobId, { 
+            status: 'error', 
+            error: 'Failed to process file in queue', 
+            details: error.message 
+        });
+    }
+    
+    isProcessing = false;
+    // Process next item in queue
+    processQueue();
+}
 
 async function transcribeAudio(inputPath, jobId) {
     console.log('[' + Date.now() + '] Starting transcription for:', inputPath);
@@ -53,86 +78,104 @@ async function transcribeAudio(inputPath, jobId) {
     const absolutePath = path.resolve(inputPath);
     console.log('[' + Date.now() + '] Absolute path:', absolutePath);
 
+    // Check available memory before starting
+    const memInfo = fs.readFileSync('/proc/meminfo', 'utf8');
+    const availableMemMatch = memInfo.match(/MemAvailable:\s+(\d+)/);
+    if (availableMemMatch) {
+        const availableMem = parseInt(availableMemMatch[1]) / 1024; // Convert to MB
+        console.log(`[${Date.now()}] Available memory before transcription: ${availableMem.toFixed(2)} MB`);
+    }
+
     try {
-        // Use medium model for better quality
-        const transcriptionProcess = spawn('whisper', [
-            absolutePath,
-            '--model', 'medium',  // Changed from tiny to medium for better quality
-            '--language', 'en',
-            '--output_dir', UPLOAD_DIR
-        ]);
+        return new Promise((resolve, reject) => {
+            // Use medium model for better quality but with optimized parameters
+            const transcriptionProcess = spawn('whisper', [
+                absolutePath,
+                '--model', 'medium',
+                '--language', 'en',
+                '--output_dir', UPLOAD_DIR,
+                '--device', 'cpu',      // Force CPU usage
+                '--threads', '2'        // Limit threads to reduce memory usage
+            ]);
 
-        let output = '';
-        let errorOutput = '';
+            let output = '';
+            let errorOutput = '';
 
-        transcriptionProcess.stdout.on('data', (data) => {
-            const message = data.toString();
-            output += message;
-            console.log('[' + Date.now() + '] Whisper output:', message);
-            // Update progress
-            transcriptions.set(jobId, { status: 'processing', progress: output });
-        });
+            transcriptionProcess.stdout.on('data', (data) => {
+                const message = data.toString();
+                output += message;
+                console.log('[' + Date.now() + '] Whisper output:', message);
+                // Update progress
+                transcriptions.set(jobId, { status: 'processing', progress: output });
+            });
 
-        transcriptionProcess.stderr.on('data', (data) => {
-            const message = data.toString();
-            errorOutput += message;
-            console.error('[' + Date.now() + '] Whisper stderr:', message);
-        });
+            transcriptionProcess.stderr.on('data', (data) => {
+                const message = data.toString();
+                errorOutput += message;
+                console.error('[' + Date.now() + '] Whisper stderr:', message);
+            });
 
-        transcriptionProcess.on('close', (code) => {
-            console.log('[' + Date.now() + '] Whisper process exited with code', code);
-            
-            // Even if code is null (process terminated), try to find the output file
-            const txtFile = path.join(UPLOAD_DIR, path.basename(inputPath, path.extname(inputPath)) + '.txt');
-            console.log('[' + Date.now() + '] Looking for transcript at:', txtFile);
-            
-            if (fs.existsSync(txtFile)) {
-                const transcription = fs.readFileSync(txtFile, 'utf8');
-                transcriptions.set(jobId, { status: 'completed', transcription });
-                console.log('[' + Date.now() + '] Transcription found and saved');
-            } else {
-                // If the process was terminated but no output file, try a direct command
-                console.log('[' + Date.now() + '] No transcription file found, trying direct command');
+            transcriptionProcess.on('close', (code) => {
+                console.log('[' + Date.now() + '] Whisper process exited with code', code);
                 
-                // Execute whisper directly as a synchronous process with medium model
-                const { exec } = require('child_process');
-                exec(`cd ${UPLOAD_DIR} && whisper "${absolutePath}" --model medium --language en`, (error, stdout, stderr) => {
-                    if (error) {
-                        console.error('[' + Date.now() + '] Direct command error:', error);
-                        transcriptions.set(jobId, { 
-                            status: 'error', 
-                            error: 'Failed to transcribe audio', 
-                            details: error.message 
-                        });
-                        return;
-                    }
+                // Even if code is null (process terminated), try to find the output file
+                const baseName = path.basename(inputPath, path.extname(inputPath));
+                const txtFile = path.join(UPLOAD_DIR, baseName + '.txt');
+                console.log('[' + Date.now() + '] Looking for transcript at:', txtFile);
+                
+                if (fs.existsSync(txtFile)) {
+                    const transcription = fs.readFileSync(txtFile, 'utf8');
+                    transcriptions.set(jobId, { status: 'completed', transcription });
+                    console.log('[' + Date.now() + '] Transcription found and saved');
+                    resolve();
+                } else {
+                    // If the process was terminated but no output file, try a direct command
+                    console.log('[' + Date.now() + '] No transcription file found, trying direct command');
                     
-                    // Check again for the output file
-                    if (fs.existsSync(txtFile)) {
-                        const transcription = fs.readFileSync(txtFile, 'utf8');
-                        transcriptions.set(jobId, { status: 'completed', transcription });
-                        console.log('[' + Date.now() + '] Transcription found after direct command');
-                    } else {
-                        transcriptions.set(jobId, { 
-                            status: 'error', 
-                            error: 'Transcription file not found after direct command' 
-                        });
-                    }
-                });
-            }
-        });
+                    // Execute whisper directly as a synchronous process with medium model
+                    const { exec } = require('child_process');
+                    exec(`cd ${UPLOAD_DIR} && whisper "${absolutePath}" --model medium --language en --device cpu --threads 2`, (error, stdout, stderr) => {
+                        if (error) {
+                            console.error('[' + Date.now() + '] Direct command error:', error);
+                            transcriptions.set(jobId, { 
+                                status: 'error', 
+                                error: 'Failed to transcribe audio', 
+                                details: error.message 
+                            });
+                            reject(error);
+                            return;
+                        }
+                        
+                        // Check again for the output file
+                        if (fs.existsSync(txtFile)) {
+                            const transcription = fs.readFileSync(txtFile, 'utf8');
+                            transcriptions.set(jobId, { status: 'completed', transcription });
+                            console.log('[' + Date.now() + '] Transcription found after direct command');
+                            resolve();
+                        } else {
+                            const err = new Error('Transcription file not found after direct command');
+                            transcriptions.set(jobId, { 
+                                status: 'error', 
+                                error: err.message 
+                            });
+                            reject(err);
+                        }
+                    });
+                }
+            });
 
-        transcriptionProcess.on('error', (err) => {
-            console.error('[' + Date.now() + '] Whisper process error:', err);
-            transcriptions.set(jobId, { status: 'error', error: err.message });
+            transcriptionProcess.on('error', (err) => {
+                console.error('[' + Date.now() + '] Whisper process error:', err);
+                transcriptions.set(jobId, { status: 'error', error: err.message });
+                reject(err);
+            });
         });
     } catch (error) {
         console.error('[' + Date.now() + '] Error during transcription:', error);
         transcriptions.set(jobId, { status: 'error', error: error.message });
+        throw error;
     }
 }
-
-
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -156,8 +199,14 @@ app.post('/api/transcribe', upload.single('files'), async (req, res) => {
         // Store initial job status
         transcriptions.set(jobId, { status: 'started' });
         
-        // Start transcription in background
-        transcribeAudio(req.file.path, jobId);
+        // Add to processing queue instead of starting immediately
+        transcriptionQueue.push({
+            filePath: req.file.path,
+            jobId: jobId
+        });
+        
+        // Start processing if not already running
+        processQueue();
         
         // Return job ID immediately
         res.json({ jobId });
@@ -177,6 +226,15 @@ app.get('/api/status/:jobId', (req, res) => {
     }
     
     res.json(status);
+});
+
+// Queue status endpoint (for debugging)
+app.get('/api/queue', (req, res) => {
+    res.json({
+        queueLength: transcriptionQueue.length,
+        isProcessing: isProcessing,
+        activeTranscriptions: Array.from(transcriptions.entries()).length
+    });
 });
 
 // Error handling middleware
