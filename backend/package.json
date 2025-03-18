@@ -1,15 +1,22 @@
 {
-  "name": "whisper-backend",
+  "name": "backend",
   "version": "1.0.0",
-  "description": "Backend for Whisper transcription service",
+  "description": "Backend for Audio Transcription application",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "multer": "^1.4.5-lts.1"
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "ytdl-core": "^4.11.5",
+    "fluent-ffmpeg": "^2.1.2",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
   }
 }
