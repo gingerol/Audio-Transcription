@@ -1,0 +1,15 @@
+[Unit]
+Description=Whisper Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/whisper-app/backend
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+Environment=PORT=4001
+Environment=UPLOAD_DIR=/var/www/whisper-app/backend/uploads
+
+[Install]
+WantedBy=multi-user.target

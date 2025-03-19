@@ -1,17 +1,26 @@
-# Node modules
+# Dependency directories
 node_modules/
 
 # Build files
 dist/
+build/
+
+# Logs
+logs
+*.log
+npm-debug.log*
 
 # Environment variables
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# Uploaded files
-uploads/*.m4a
-uploads/*.mp3
-uploads/*.wav
-uploads/*.ogg
+# Upload directory
+backend/uploads/*
+!backend/uploads/.gitkeep
 
-# Logs
-*.log
+# System Files
+.DS_Store
+Thumbs.db
