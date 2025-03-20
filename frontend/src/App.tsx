@@ -298,17 +298,28 @@ const downloadTranscription = (job: TranscriptionJob) => {
 
 const renderJobStatus = (job: TranscriptionJob) => {
   switch (job.status) {
-    case 'waiting':
-      return (
-        <div className="flex flex-col items-center justify-center py-8">
-          <div className="text-gray-500 mb-4 flex items-center">
-            <svg className="h-6 w-6 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-            <span>Waiting to process...</span>
-          </div>
-        </div>
-      );
+case 'waiting':
+  return (
+    <div className="flex flex-col items-center justify-center py-8">
+      <div className="text-gray-500 mb-4 flex items-center">
+        <svg 
+          className="h-6 w-6 mr-2 text-gray-400 animate-pulse" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24" 
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            strokeWidth="2" 
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+        <span>Waiting to process...</span>
+      </div>
+    </div>
+  );
     case 'processing':
       return (
         <div className="flex flex-col items-center justify-center py-8">
