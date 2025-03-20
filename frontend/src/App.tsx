@@ -264,21 +264,90 @@ function App() {
     setIsYoutubeValid(true); // Update based on validation
   };
 
-  const renderJobStatus = (job: TranscriptionJob) => {
-    // Implement the rendering logic for job status here
-    return <div>{job.status}</div>; // Placeholder implementation
-  };
+const downloadTranscription = (job: TranscriptionJob) => {
+  if (!job.transcription) return;
 
-  const clearAll = () => {
-    setFiles([]);
-    setJobs([]);
-    setIsProcessing(false);
-    setError('');
-    
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
+  // Create a Blob with the transcription text
+  const blob = new Blob([job.transcription], { type: 'text/plain' });
+  
+  // Create a URL for the Blob
+  const url = URL.createObjectURL(blob);
+  
+  // Create a temporary link and trigger download
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${job.fileName.split('.')[0]}_transcription.txt`;
+  document.body.appendChild(a);
+  a.click();
+  
+  // Clean up
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+const renderJobStatus = (job: TranscriptionJob) => {
+  switch (job.status) {
+    case 'waiting':
+      return (
+        <div className="flex flex-col items-center justify-center py-8">
+          <div className="text-gray-500 mb-4 flex items-center">
+            <svg className="h-6 w-6 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span>Waiting to process...</span>
+          </div>
+        </div>
+      );
+    case 'processing':
+      return (
+        <div className="flex flex-col items-center justify-center py-8">
+          <div className="text-blue-500 mb-4 font-medium">Transcribing Audio</div>
+          <div className="flex space-x-2 mb-4">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></div>
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
+          </div>
+          {job.progress !== undefined && (
+            <div className="w-full max-w-xs bg-gray-200 rounded-full h-2.5 mb-4">
+              <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${job.progress}%` }}></div>
+            </div>
+          )}
+          <div className="text-sm text-gray-500">This might take a few minutes...</div>
+        </div>
+      );
+    case 'completed':
+      return (
+        <div className="py-4">
+          <div className="flex justify-between items-center mb-4">
+            <div className="text-green-600 font-medium">Transcription Completed</div>
+            <button 
+              onClick={() => downloadTranscription(job)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+            >
+              <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              Download
+            </button>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 max-h-60 overflow-y-auto whitespace-pre-wrap">
+            {job.transcription}
+          </div>
+        </div>
+      );
+    case 'error':
+      return (
+        <div className="py-4">
+          <div className="text-red-600 font-medium mb-2">Error</div>
+          <div className="bg-red-50 p-4 rounded-lg text-sm text-red-700">
+            {job.error || 'An unknown error occurred during transcription.'}
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+};
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans">
