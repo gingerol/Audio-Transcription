@@ -54,6 +54,17 @@ function App() {
   const [isYoutubeValid, setIsYoutubeValid] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'file' | 'youtube'>('file');
 
+
+const clearAll = () => {
+  setJobs([]);
+  setFiles([]);
+};
+
+
+
+
+
+
   // Fetch available models and languages on component mount
   useEffect(() => {
     async function fetchModelAndLanguages() {
